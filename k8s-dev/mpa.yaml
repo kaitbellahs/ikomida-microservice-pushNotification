@@ -1,0 +1,32 @@
+apiVersion: autoscaling.gke.io/v1beta1
+kind: MultidimPodAutoscaler
+metadata:
+  name: pushnotification-autoscaler
+  namespace: ikomida
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pushnotification-microservice
+  goals:
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 90
+  constraints:
+    global:
+      minReplicas: 1
+      maxReplicas: 2
+    containerControlledResources: [memory]
+    container:
+      - name: "*"
+        requests:
+          minAllowed:
+            memory: 0Gi
+          maxAllowed:
+            memory: 500m
+  policy:
+    updateMode: Auto

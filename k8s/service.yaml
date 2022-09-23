@@ -1,0 +1,13 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: pushnotification-service
+  labels:
+    app: pushnotification-service
+  namespace: ikomida
+spec:
+  selector:
+     app: pushnotification
+  ports:
+  - protocol: TCP
+    port: 1988
