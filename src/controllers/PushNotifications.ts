@@ -138,7 +138,6 @@ export default class PushNotifications {
         await amqp?.publish(Domain.RabbitMQ.VENDOR_PUSH_NOTIFICATION_QUEUE, payload);
         await amqp?.close();
       } catch (exception: any) {
-        console.error(exception);
         const error = new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_PUSH_NOTIFICATION_EXCEPTION,
           exception,
