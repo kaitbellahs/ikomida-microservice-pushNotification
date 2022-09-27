@@ -62,7 +62,7 @@
     "typescript": "^4.8.3"
   },
   "dependencies": {
-    "@ikomida/shared-backend": "^0.0.232",
+    "@ikomida/shared-backend": "^0.0.233",
     "axios": "^0.27.2",
     "body-parser": "^1.20.0",
     "cors": "^2.8.5",
