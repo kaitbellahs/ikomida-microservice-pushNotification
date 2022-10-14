@@ -31,6 +31,11 @@ app.get('/vendor/pushNotifications/:timestamp', async (req, res) => {
   const payload = await notifications.getPushNotifications(identity, Number(req?.params?.timestamp))
   res.status(200).sendResponse(payload)
 })
+app.get('/pushNotifications/:timestamp', async (req, res) => {
+  const identity: Types.Classes.CUser = Types.Classes.CUser.fromObject(req.headers?.identity)
+  const payload = await notifications.getPushNotificationMessages(identity, Number(req?.params?.timestamp))
+  res.status(200).sendResponse(payload)
+})
 
 app.post('/vendor/pushNotification', async (req, res) => {
   const identity: Types.Classes.CUser = Types.Classes.CUser.fromObject(req.headers?.identity)

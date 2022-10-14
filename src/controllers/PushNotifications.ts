@@ -212,7 +212,70 @@ export default class PushNotifications {
           sends: vendorPNMessage?.sends,
           fails: vendorPNMessage?.fails,
           opens: vendorPNMessage?.opens,
-          createdAt: vendorPNMessage?.createdAt
+          createdAt: vendorPNMessage?.createdAt,
+          timestamp: vendorPNMessage?.createdAt.getTime()
+        })
+      }
+      return new Utils.Return(true, pNMessages)
+    } catch (exception: any) {
+      let error = new Utils.iKomidaError(
+        Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,
+        exception
+      )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
+      return error.logAndReturn(this.logger)
+    }
+  }
+
+  async getPushNotificationMessages(identity: Types.Classes.CUser, timestamp = 0) {
+    try {
+      const where =
+        timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
+          ? {
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              }
+            }
+          : {}
+      const contractModel = await DBModels.ContractModel.findOne({
+        where: {
+          ikomidaID: identity.ikomidaID
+        },
+        include: [
+          {
+            model: DBModels.PlanModel,
+            required: true
+          },
+          {
+            model: DBModels.UserModel,
+            where: {
+              id: identity.id,
+              role: {
+                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.CLIENT]
+              }
+            },
+            required: true
+          },
+          {
+            model: DBModels.PNMessageModel,
+            required: false,
+            where
+          }
+        ]
+      })
+      if (!contractModel) {
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
+      }
+      const pNMessages = []
+      //TODO: create class
+      for (const pNMessage of contractModel?.pNMessages ?? []) {
+        pNMessages?.push({
+          title: pNMessage?.title,
+          body: pNMessage?.body,
+          createdAt: pNMessage?.createdAt,
+          timestamp: pNMessage?.createdAt.getTime()
         })
       }
       return new Utils.Return(true, pNMessages)
