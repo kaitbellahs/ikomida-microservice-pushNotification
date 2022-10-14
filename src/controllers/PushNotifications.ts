@@ -75,7 +75,6 @@ export default class PushNotifications {
   }
 
   async newPushNotification(identity: Types.Classes.CUser, input: any) {
-    let transaction: Domain.SqlDB.Transaction | undefined = undefined
     try {
       const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
       if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
@@ -127,17 +126,16 @@ export default class PushNotifications {
         )
       }
 
-      transaction = await Domain.SqlDB.sequelize.transaction({
-        autocommit: false
+      const vendorPNMessage = await contractModel?.$create('vendorPNMessage', {
+        title: payload?.title,
+        body: payload?.body
       })
-      const vendorPNMessage = await contractModel?.$create(
-        'vendorPNMessage',
-        {
-          title: payload?.title,
-          body: payload?.body
-        },
-        { transaction }
-      )
+      if (!vendorPNMessage) {
+        throw new Utils.iKomidaError(
+          Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
+          ''
+        )
+      }
       try {
         const payload = new Types.Classes.CAMQPPayload<string>({
           method: 'sendVendorPushNotifications',
@@ -147,15 +145,14 @@ export default class PushNotifications {
         await amqp?.publish(Domain.RabbitMQ.VENDOR_PUSH_NOTIFICATION_QUEUE, payload)
         await amqp?.close()
       } catch (exception: any) {
+        await vendorPNMessage.destroy()
         throw new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_PUSH_NOTIFICATION_EXCEPTION,
           exception
         )
       }
-      await transaction.commit()
       return new Utils.Return(true)
     } catch (exception: any) {
-      await transaction?.rollback()
       let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
         exception
@@ -172,10 +169,10 @@ export default class PushNotifications {
       const where =
         timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
           ? {
-            createdAt: {
-              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              }
             }
-          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
