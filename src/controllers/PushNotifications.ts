@@ -5,11 +5,11 @@ export default class PushNotifications {
   constructor(logger: Utils.Logger) {
     this.logger = logger
   }
+
   async register(identity: Types.Classes.CUser, input: any) {
     const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
     if (!payload.validate() || !this.validateObject(payload)) {
-      const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
-      return error.logAndReturn(this.logger)
+      throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
     }
     try {
       const contractModel = await DBModels.ContractModel.findOne({
@@ -41,14 +41,15 @@ export default class PushNotifications {
           }
         ]
       })
+
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_CONTRACT)
-        return error.logAndReturn(this.logger)
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_CONTRACT)
       }
+
       if ((contractModel?.users?.length ?? 0) !== 1) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_INVALID_USER)
-        return error.logAndReturn(this.logger)
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_INVALID_USER)
       }
+
       const userModel = contractModel?.users?.[0]
       let pNModel = userModel?.pN
       if (pNModel) {
@@ -59,31 +60,28 @@ export default class PushNotifications {
         pNModel = await userModel?.$create('pN', {
           platform: payload.platform,
           token: payload.token,
-          role: identity.role
+          role: identity.role,
+          contractId: contractModel.id
         })
-        if (pNModel) {
-          await contractModel.$add('pNs', pNModel)
-        }
       }
       return new Utils.Return(payload?.platform !== null && payload?.token !== null && pNModel !== null, {})
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(
-        Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION,
-        exception
-      )
+      let error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION, exception)
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
       return error.logAndReturn(this.logger)
     }
   }
 
   async newPushNotification(identity: Types.Classes.CUser, input: any) {
-    const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
-    if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
-      const error = new Utils.iKomidaError(
-        Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTIFICATION_MISSING_DATA
-      )
-      return error.logAndReturn(this.logger)
-    }
+    let transaction: Domain.SqlDB.Transaction | undefined = undefined
     try {
+      const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
+      if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTIFICATION_MISSING_DATA)
+      }
+
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
           ikomidaID: identity.ikomidaID
@@ -106,34 +104,40 @@ export default class PushNotifications {
           {
             model: DBModels.ContractPaymentSignatureModel,
             required: false
-          },
-          {
-            model: DBModels.VendorPNMessageModel,
-            required: false,
-            where: {
-              createdAt: {
-                [Domain.SqlDB.Op.gt]: Domain.SqlDB.Column('contractPaymentSignature.lastDueDate')
-              }
-            }
           }
         ]
       })
+
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
-        return error.logAndReturn(this.logger)
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
+
+      const countVendorPNMessages = await contractModel?.$count('vendorPNMessages', {
+        where: {
+          createdAt: {
+            [Domain.SqlDB.Op.gt]: Domain.SqlDB.Column('contractPaymentSignature.lastDueDate')
+          }
+        }
+      })
       const pNsLimit = contractModel?.plan?.pushNotifications ?? -1
-      if (pNsLimit !== 0 && (contractModel?.vendorPNMessages?.length ?? 0) >= pNsLimit) {
-        const error = new Utils.iKomidaError(
+      if (pNsLimit !== -1 && countVendorPNMessages >= pNsLimit) {
+        throw new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_LIMIT_EXCEEDED,
           pNsLimit
         )
-        return error.logAndReturn(this.logger)
       }
-      const vendorPNMessage = await contractModel?.$create('vendorPNMessage', {
-        title: payload?.title,
-        body: payload?.body
+
+      transaction = await Domain.SqlDB.sequelize.transaction({
+        autocommit: false
       })
+      const vendorPNMessage = await contractModel?.$create(
+        'vendorPNMessage',
+        {
+          title: payload?.title,
+          body: payload?.body
+        },
+        { transaction }
+      )
       try {
         const payload = new Types.Classes.CAMQPPayload<string>({
           method: 'sendVendorPushNotifications',
@@ -143,18 +147,22 @@ export default class PushNotifications {
         await amqp?.publish(Domain.RabbitMQ.VENDOR_PUSH_NOTIFICATION_QUEUE, payload)
         await amqp?.close()
       } catch (exception: any) {
-        const error = new Utils.iKomidaError(
+        throw new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_PUSH_NOTIFICATION_EXCEPTION,
           exception
         )
-        error.log(this.logger)
       }
+      await transaction.commit()
       return new Utils.Return(true)
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(
+      await transaction?.rollback()
+      let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
         exception
       )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
       return error.logAndReturn(this.logger)
     }
   }
@@ -196,8 +204,7 @@ export default class PushNotifications {
         ]
       })
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
-        return error.logAndReturn(this.logger)
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
       const pNMessages = []
       //TODO: create class
@@ -213,10 +220,13 @@ export default class PushNotifications {
       }
       return new Utils.Return(true, pNMessages)
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(
+      let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,
         exception
       )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
       return error.logAndReturn(this.logger)
     }
   }
