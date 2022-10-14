@@ -115,7 +115,7 @@ export default class PushNotifications {
       const countVendorPNMessages = await contractModel?.$count('vendorPNMessages', {
         where: {
           createdAt: {
-            [Domain.SqlDB.Op.gt]: Domain.SqlDB.Column('contractPaymentSignature.lastDueDate')
+            [Domain.SqlDB.Op.gt]: contractModel.contractPaymentSignature?.lastDueDate
           }
         }
       })
@@ -172,10 +172,10 @@ export default class PushNotifications {
       const where =
         timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
           ? {
-              createdAt: {
-                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
-              }
+            createdAt: {
+              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
             }
+          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
