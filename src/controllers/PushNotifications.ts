@@ -1,6 +1,7 @@
 import { Domain, Utils, BackendTypes, Logics, Types, DBModels, objHasProp } from '@ikomida/shared-backend'
 
 export default class PushNotifications {
+  limit = 10
   logger
   constructor(logger: Utils.Logger) {
     this.logger = logger
@@ -196,7 +197,8 @@ export default class PushNotifications {
           {
             model: DBModels.VendorPNMessageModel,
             required: false,
-            where
+            where,
+            limit: this.limit
           }
         ]
       })
@@ -256,12 +258,15 @@ export default class PushNotifications {
                 [Domain.SqlDB.Op.in]: [BackendTypes.Roles.CLIENT]
               }
             },
-            required: true
-          },
-          {
-            model: DBModels.PNMessageModel,
-            required: false,
-            where
+            required: true,
+            include: [
+              {
+                model: DBModels.PNMessageModel,
+                required: false,
+                where,
+                limit: this.limit
+              }
+            ]
           }
         ]
       })
@@ -270,7 +275,7 @@ export default class PushNotifications {
       }
       const pNMessages = []
       //TODO: create class
-      for (const pNMessage of contractModel?.pNMessages ?? []) {
+      for (const pNMessage of contractModel?.users?.[0].pNMessages ?? []) {
         pNMessages?.push({
           title: pNMessage?.title,
           body: pNMessage?.body,
