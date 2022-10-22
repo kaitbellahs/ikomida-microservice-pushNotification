@@ -1,20 +1,21 @@
-import { Domain, Utils, BackendTypes, Logics, Types, DBModels, objHasProp } from '@ikomida/shared-backend';
+import { Domain, Utils, BackendTypes, Logics, Types, DBModels, objHasProp } from '@ikomida/shared-backend'
 
 export default class PushNotifications {
-  logger;
+  limit = 10
+  logger
   constructor(logger: Utils.Logger) {
-    this.logger = logger;
+    this.logger = logger
   }
+
   async register(identity: Types.Classes.CUser, input: any) {
     const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
     if (!payload.validate() || !this.validateObject(payload)) {
-      const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA);
-      return error.logAndReturn(this.logger);
+      throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
     }
     try {
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
-          ikomidaID: identity.ikomidaID,
+          ikomidaID: identity.ikomidaID
         },
         include: [
           {
@@ -27,130 +28,140 @@ export default class PushNotifications {
                   BackendTypes.Roles.STAFF,
                   BackendTypes.Roles.CLIENT,
                   BackendTypes.Roles.ADMIN,
-                  BackendTypes.Roles.RESELLER,
-                ],
-              },
+                  BackendTypes.Roles.RESELLER
+                ]
+              }
             },
             required: false,
             include: [
               {
                 model: DBModels.PNModel,
-                required: false,
-              },
-            ],
-          },
-        ],
-      });
+                required: false
+              }
+            ]
+          }
+        ]
+      })
+
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_CONTRACT);
-        return error.logAndReturn(this.logger);
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_CONTRACT)
       }
+
       if ((contractModel?.users?.length ?? 0) !== 1) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_INVALID_USER);
-        return error.logAndReturn(this.logger);
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_INVALID_USER)
       }
-      const userModel = contractModel?.users?.[0];
-      let pNModel = userModel?.pN;
+
+      const userModel = contractModel?.users?.[0]
+      let pNModel = userModel?.pN
       if (pNModel) {
-        pNModel.platform = payload?.platform;
-        pNModel.token = payload?.token;
-        await pNModel.save();
+        pNModel.platform = payload?.platform
+        pNModel.token = payload?.token
+        await pNModel.save()
       } else {
         pNModel = await userModel?.$create('pN', {
           platform: payload.platform,
           token: payload.token,
           role: identity.role,
-        });
-        if (pNModel) {
-          await contractModel.$add('pNs', pNModel);
-        }
+          contractId: contractModel.id
+        })
       }
-      return new Utils.Return(payload?.platform !== null && payload?.token !== null && pNModel !== null, {});
+      return new Utils.Return(payload?.platform !== null && payload?.token !== null && pNModel !== null, {})
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION, exception);
-      return error.logAndReturn(this.logger);
+      let error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION, exception)
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
+      return error.logAndReturn(this.logger)
     }
   }
 
   async newPushNotification(identity: Types.Classes.CUser, input: any) {
-    const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
-    if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
-      const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTIFICATION_MISSING_DATA);
-      return error.logAndReturn(this.logger);
-    }
     try {
+      const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
+      if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTIFICATION_MISSING_DATA)
+      }
+
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
-          ikomidaID: identity.ikomidaID,
+          ikomidaID: identity.ikomidaID
         },
         include: [
           {
             model: DBModels.PlanModel,
-            required: true,
+            required: true
           },
           {
             model: DBModels.UserModel,
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN],
-              },
+                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN]
+              }
             },
-            required: true,
+            required: true
           },
           {
             model: DBModels.ContractPaymentSignatureModel,
-            required: false,
-          },
-          {
-            model: DBModels.VendorPNMessageModel,
-            required: false,
-            where: {
-              createdAt: {
-                [Domain.SqlDB.Op.gt]: Domain.SqlDB.Column('contractPaymentSignature.lastDueDate'),
-              },
-            },
-          },
-        ],
-      });
+            required: false
+          }
+        ]
+      })
+
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT);
-        return error.logAndReturn(this.logger);
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNsLimit = contractModel?.plan?.pushNotifications ?? -1;
-      if (pNsLimit !== 0 && (contractModel?.vendorPNMessages?.length ?? 0) >= pNsLimit) {
-        const error = new Utils.iKomidaError(
+
+      const countVendorPNMessages = await contractModel?.$count('vendorPNMessages', {
+        where: {
+          createdAt: {
+            [Domain.SqlDB.Op.gt]: contractModel.contractPaymentSignature?.lastDueDate
+          }
+        }
+      })
+      const pNsLimit = contractModel?.plan?.pushNotifications ?? -1
+      if (pNsLimit !== -1 && countVendorPNMessages >= pNsLimit) {
+        throw new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_LIMIT_EXCEEDED,
-          pNsLimit,
-        );
-        return error.logAndReturn(this.logger);
+          pNsLimit
+        )
       }
+
       const vendorPNMessage = await contractModel?.$create('vendorPNMessage', {
         title: payload?.title,
-        body: payload?.body,
-      });
+        body: payload?.body
+      })
+      if (!vendorPNMessage) {
+        throw new Utils.iKomidaError(
+          Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
+          ''
+        )
+      }
       try {
         const payload = new Types.Classes.CAMQPPayload<string>({
           method: 'sendVendorPushNotifications',
-          object: vendorPNMessage?.id,
-        });
-        const amqp = new Domain.RabbitMQ(this.logger);
-        await amqp?.publish(Domain.RabbitMQ.VENDOR_PUSH_NOTIFICATION_QUEUE, payload);
-        await amqp?.close();
+          object: vendorPNMessage?.id
+        })
+        const amqp = new Domain.RabbitMQ(this.logger)
+        await amqp?.publish(Domain.RabbitMQ.VENDOR_PUSH_NOTIFICATION_QUEUE, payload)
+        await amqp?.close()
       } catch (exception: any) {
-        const error = new Utils.iKomidaError(
+        await vendorPNMessage.destroy()
+        throw new Utils.iKomidaError(
           Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_PUSH_NOTIFICATION_EXCEPTION,
-          exception,
-        );
-        error.log(this.logger);
+          exception
+        )
       }
-      return new Utils.Return(true);
+      return new Utils.Return(true)
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(
+      let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
-        exception,
-      );
-      return error.logAndReturn(this.logger);
+        exception
+      )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
+      return error.logAndReturn(this.logger)
     }
   }
 
@@ -159,42 +170,42 @@ export default class PushNotifications {
       const where =
         timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
           ? {
-            createdAt: {
-              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp))),
-            },
-          }
-          : {};
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              }
+            }
+          : {}
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
-          ikomidaID: identity.ikomidaID,
+          ikomidaID: identity.ikomidaID
         },
         include: [
           {
             model: DBModels.PlanModel,
-            required: true,
+            required: true
           },
           {
             model: DBModels.UserModel,
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN],
-              },
+                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN]
+              }
             },
-            required: true,
+            required: true
           },
           {
             model: DBModels.VendorPNMessageModel,
             required: false,
             where,
-          },
-        ],
-      });
+            limit: this.limit
+          }
+        ]
+      })
       if (!contractModel) {
-        const error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT);
-        return error.logAndReturn(this.logger);
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNMessages = [];
+      const pNMessages = []
       //TODO: create class
       for (const vendorPNMessage of contractModel?.vendorPNMessages ?? []) {
         pNMessages?.push({
@@ -204,22 +215,91 @@ export default class PushNotifications {
           fails: vendorPNMessage?.fails,
           opens: vendorPNMessage?.opens,
           createdAt: vendorPNMessage?.createdAt,
-        });
+          timestamp: vendorPNMessage?.createdAt.getTime()
+        })
       }
-      return new Utils.Return(true, pNMessages);
+      return new Utils.Return(true, pNMessages)
     } catch (exception: any) {
-      const error = new Utils.iKomidaError(
+      let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,
-        exception,
-      );
-      return error.logAndReturn(this.logger);
+        exception
+      )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
+      return error.logAndReturn(this.logger)
+    }
+  }
+
+  async getPushNotificationMessages(identity: Types.Classes.CUser, timestamp = 0) {
+    try {
+      const where =
+        timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
+          ? {
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              }
+            }
+          : {}
+      const contractModel = await DBModels.ContractModel.findOne({
+        where: {
+          ikomidaID: identity.ikomidaID
+        },
+        include: [
+          {
+            model: DBModels.PlanModel,
+            required: true
+          },
+          {
+            model: DBModels.UserModel,
+            where: {
+              id: identity.id,
+              role: {
+                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.CLIENT]
+              }
+            },
+            required: true,
+            include: [
+              {
+                model: DBModels.PNMessageModel,
+                required: false,
+                where,
+                limit: this.limit
+              }
+            ]
+          }
+        ]
+      })
+      if (!contractModel) {
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
+      }
+      const pNMessages = []
+      //TODO: create class
+      for (const pNMessage of contractModel?.users?.[0].pNMessages ?? []) {
+        pNMessages?.push({
+          title: pNMessage?.title,
+          body: pNMessage?.body,
+          createdAt: pNMessage?.createdAt,
+          timestamp: pNMessage?.createdAt.getTime()
+        })
+      }
+      return new Utils.Return(true, pNMessages)
+    } catch (exception: any) {
+      let error = new Utils.iKomidaError(
+        Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,
+        exception
+      )
+      if (exception instanceof Utils.iKomidaError) {
+        error = exception
+      }
+      return error.logAndReturn(this.logger)
     }
   }
 
   validateObject(object: any) {
-    return objHasProp(['platform', 'token'], object);
+    return objHasProp(['platform', 'token'], object)
   }
   validatePushNotificationObject(object: any) {
-    return objHasProp(['title', 'body'], object);
+    return objHasProp(['title', 'body'], object)
   }
 }
