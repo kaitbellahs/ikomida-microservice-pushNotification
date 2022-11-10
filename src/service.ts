@@ -21,7 +21,9 @@ const port = process?.env?.PORT || 80
 const notifications = new PushNotifications(logger)
 
 app.post('/notification/register', async (req, res) => {
+  console.log('req.headers?.identity:', req.headers?.identity)
   const identity: Types.Classes.CUser = Types.Classes.CUser.fromObject(req.headers?.identity)
+  console.log('req.body:', req.body)
   const payload = await notifications.register(identity, req.body)
   res.status(payload?.success ? 201 : 200).sendResponse(payload)
 })
