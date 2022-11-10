@@ -19,7 +19,7 @@ spec:
   constraints:
     global:
       minReplicas: 1
-      maxReplicas: 2
+      maxReplicas: $MAX_REPLICAS
     containerControlledResources: [memory]
     container:
       - name: "*"

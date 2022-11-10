@@ -8,12 +8,16 @@ export default class PushNotifications {
   }
 
   async register(identity: Types.Classes.CUser, input: any) {
+    console.log('identity:', identity.toJSON())
+    console.log('input:', input)
     const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
+    console.log('payload:', payload)
     if (!payload.validate() || !this.validateObject(payload)) {
       throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
     }
     try {
       const contractModel = await DBModels.ContractModel.findOne({
+        logging: console.log,
         where: {
           ikomidaID: identity.ikomidaID
         },
@@ -65,7 +69,7 @@ export default class PushNotifications {
           contractId: contractModel.id
         })
       }
-      return new Utils.Return(payload?.platform !== null && payload?.token !== null && pNModel !== null, {})
+      return new Utils.Return(pNModel !== null)
     } catch (exception: any) {
       let error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION, exception)
       if (exception instanceof Utils.iKomidaError) {
