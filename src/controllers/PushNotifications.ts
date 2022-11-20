@@ -28,11 +28,11 @@ export default class PushNotifications {
               id: identity.id,
               role: {
                 [Domain.SqlDB.Op.in]: [
-                  BackendTypes.Roles.VENDOR,
-                  BackendTypes.Roles.STAFF,
-                  BackendTypes.Roles.CLIENT,
-                  BackendTypes.Roles.ADMIN,
-                  BackendTypes.Roles.RESELLER
+                  Types.Types.TRoles.VENDOR,
+                  Types.Types.TRoles.STAFF,
+                  Types.Types.TRoles.CLIENT,
+                  Types.Types.TRoles.ADMIN,
+                  Types.Types.TRoles.RESELLER
                 ]
               }
             },
@@ -100,7 +100,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN]
+                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.VENDOR, Types.Types.TRoles.STAFF, Types.Types.TRoles.ADMIN]
               }
             },
             required: true
@@ -193,7 +193,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.VENDOR, BackendTypes.Roles.STAFF, BackendTypes.Roles.ADMIN]
+                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.VENDOR, Types.Types.TRoles.STAFF, Types.Types.TRoles.ADMIN]
               }
             },
             required: true
@@ -259,7 +259,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [BackendTypes.Roles.CLIENT]
+                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.CLIENT]
               }
             },
             required: true,
