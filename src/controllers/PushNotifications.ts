@@ -1,4 +1,5 @@
 import { Domain, Utils, BackendTypes, Logics, Types, DBModels, objHasProp } from '@ikomida/shared-backend'
+import { Includeable } from 'sequelize'
 
 export default class PushNotifications {
   limit = 10
@@ -7,35 +8,27 @@ export default class PushNotifications {
     this.logger = logger
   }
 
-  async register(identity: Types.Classes.CUser, input: any) {
-    console.log('identity:', identity.toJSON())
-    console.log('input:', input)
+  async register(input: any, iKomidaId?: string, deviceId?: string, identity?: Types.Classes.CUser) {
+    let transaction: Domain.SqlDB.Transaction | undefined = undefined
     const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
-    console.log('payload:', payload)
-    if (!payload.validate() || !this.validateObject(payload)) {
-      throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
-    }
     try {
-      const contractModel = await DBModels.ContractModel.findOne({
-        logging: console.log,
-        where: {
-          ikomidaID: identity.ikomidaID
-        },
-        include: [
+      if (!payload.validate() || !this.validateObject(payload) || (!identity?.ikomidaID && !iKomidaId)) {
+        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
+      }
+      const include: Includeable[] = !identity
+        ? [
+          {
+            model: DBModels.PNModel,
+            where: {
+              deviceId
+            },
+            required: false
+          }
+        ]
+        : [
           {
             model: DBModels.UserModel,
-            where: {
-              id: identity.id,
-              role: {
-                [Domain.SqlDB.Op.in]: [
-                  Types.Types.TRoles.VENDOR,
-                  Types.Types.TRoles.STAFF,
-                  Types.Types.TRoles.CLIENT,
-                  Types.Types.TRoles.ADMIN,
-                  Types.Types.TRoles.RESELLER
-                ]
-              }
-            },
+            where: { id: identity.id },
             required: false,
             include: [
               {
@@ -45,32 +38,68 @@ export default class PushNotifications {
             ]
           }
         ]
+      const contractModel = await DBModels.ContractModel.findOne({
+        where: {
+          ikomidaID: identity?.ikomidaID ?? iKomidaId
+        },
+        include
       })
 
       if (!contractModel) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_CONTRACT)
       }
 
-      if ((contractModel?.users?.length ?? 0) !== 1) {
-        throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_INVALID_USER)
-      }
-
       const userModel = contractModel?.users?.[0]
       let pNModel = userModel?.pN
+
+      transaction = await Domain.SqlDB.sequelize.transaction({
+        autocommit: false
+      })
       if (pNModel) {
         pNModel.platform = payload?.platform
         pNModel.token = payload?.token
-        await pNModel.save()
+        pNModel.deviceId = deviceId
+        await pNModel.save({ transaction })
       } else {
-        pNModel = await userModel?.$create('pN', {
-          platform: payload.platform,
-          token: payload.token,
-          role: identity.role,
-          contractId: contractModel.id
+        await DBModels.PNModel.destroy({
+          where: {
+            deviceId,
+            contractId: contractModel.id
+          },
+          transaction
         })
+        if (userModel) {
+          pNModel = await userModel?.$create(
+            'pN',
+            {
+              platform: payload.platform,
+              token: payload.token,
+              role: identity?.role,
+              deviceId,
+              contractId: contractModel.id
+            },
+            { transaction }
+          )
+        } else {
+          pNModel = await contractModel?.$create(
+            'pN',
+            {
+              platform: payload.platform,
+              token: payload.token,
+              role: identity?.role,
+              deviceId
+            },
+            { transaction }
+          )
+        }
       }
+      await transaction.commit()
+      transaction = undefined
       return new Utils.Return(pNModel !== null)
     } catch (exception: any) {
+      if (transaction) {
+        await transaction?.rollback()
+      }
       let error = new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_EXCEPTION, exception)
       if (exception instanceof Utils.iKomidaError) {
         error = exception
@@ -174,12 +203,13 @@ export default class PushNotifications {
       const where =
         timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
           ? {
-              createdAt: {
-                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
-              }
+            createdAt: {
+              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
             }
+          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
+        subQuery: false,
         where: {
           ikomidaID: identity.ikomidaID
         },
@@ -209,18 +239,20 @@ export default class PushNotifications {
       if (!contractModel) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNMessages = []
+      const pNMessages: Types.Classes.CPushNotificationMessage[] = []
       //TODO: create class
       for (const vendorPNMessage of contractModel?.vendorPNMessages ?? []) {
-        pNMessages?.push({
-          title: vendorPNMessage?.title,
-          body: vendorPNMessage?.body,
-          sends: vendorPNMessage?.sends,
-          fails: vendorPNMessage?.fails,
-          opens: vendorPNMessage?.opens,
-          createdAt: vendorPNMessage?.createdAt,
-          timestamp: vendorPNMessage?.createdAt.getTime()
-        })
+        pNMessages?.push(
+          Types.Classes.CPushNotificationMessage.init(
+            vendorPNMessage?.title,
+            vendorPNMessage?.body,
+            vendorPNMessage?.sends,
+            vendorPNMessage?.fails,
+            vendorPNMessage?.opens,
+            vendorPNMessage?.createdAt,
+            vendorPNMessage?.createdAt.getTime()
+          )
+        )
       }
       return new Utils.Return(true, pNMessages)
     } catch (exception: any) {
@@ -240,12 +272,13 @@ export default class PushNotifications {
       const where =
         timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
           ? {
-              createdAt: {
-                [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
-              }
+            createdAt: {
+              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
             }
+          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
+        subQuery: false,
         where: {
           ikomidaID: identity.ikomidaID
         },
@@ -277,15 +310,17 @@ export default class PushNotifications {
       if (!contractModel) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNMessages = []
+      const pNMessages: Types.Classes.CPushNotificationMessage[] = []
       //TODO: create class
       for (const pNMessage of contractModel?.users?.[0].pNMessages ?? []) {
-        pNMessages?.push({
-          title: pNMessage?.title,
-          body: pNMessage?.body,
-          createdAt: pNMessage?.createdAt,
-          timestamp: pNMessage?.createdAt.getTime()
-        })
+        pNMessages?.push(
+          Types.Classes.CPushNotificationMessage.init(
+            pNMessage?.title,
+            pNMessage?.body,
+            pNMessage?.createdAt,
+            pNMessage?.createdAt.getTime()
+          )
+        )
       }
       return new Utils.Return(true, pNMessages)
     } catch (exception: any) {
