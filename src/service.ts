@@ -21,10 +21,14 @@ const port = process?.env?.PORT || 80
 const notifications = new PushNotifications(logger)
 
 app.post('/notification/register', async (req, res) => {
-  console.log('req.headers?.identity:', req.headers?.identity)
-  const identity: Types.Classes.CUser = Types.Classes.CUser.fromObject(req.headers?.identity)
-  console.log('req.body:', req.body)
-  const payload = await notifications.register(identity, req.body)
+  const identity: Types.Classes.CUser | undefined = req.headers?.identity
+    ? Types.Classes.CUser.fromObject(req.headers?.identity)
+    : undefined
+  const deviceId: string | undefined =
+    typeof req.headers?.['x-ikomida-did'] === 'string' ? req.headers?.['x-ikomida-did'] : undefined
+  const iKomidaId: string | undefined =
+    typeof req.headers?.['x-ikomida-id'] === 'string' ? req.headers?.['x-ikomida-id'] : undefined
+  const payload = await notifications.register(req.body, iKomidaId, deviceId, identity)
   res.status(payload?.success ? 201 : 200).sendResponse(payload)
 })
 
