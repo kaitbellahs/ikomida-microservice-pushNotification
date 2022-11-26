@@ -28,7 +28,9 @@ app.post('/notification/register', async (req, res) => {
     typeof req.headers?.['x-ikomida-did'] === 'string' ? req.headers?.['x-ikomida-did'] : undefined
   const iKomidaId: string | undefined =
     typeof req.headers?.['x-ikomida-id'] === 'string' ? req.headers?.['x-ikomida-id'] : undefined
-  const payload = await notifications.register(req.body, iKomidaId, deviceId, identity)
+  const agent: string | undefined =
+    typeof req.headers?.['x-ikomida-agent'] === 'string' ? req.headers?.['x-ikomida-agent'] : undefined
+  const payload = await notifications.register(req.body, iKomidaId, agent, deviceId, identity)
   res.status(payload?.success ? 201 : 200).sendResponse(payload)
 })
 
