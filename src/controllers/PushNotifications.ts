@@ -8,19 +8,23 @@ export default class PushNotifications {
     this.logger = logger
   }
 
-  async register(input: any, iKomidaId?: string, deviceId?: string, identity?: Types.Classes.CUser) {
+  async register(input: any, iKomidaId?: string, agent?: string, deviceId?: string, identity?: Types.Classes.CUser) {
     let transaction: Domain.SqlDB.Transaction | undefined = undefined
     const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
     try {
-      if (!payload.validate() || !this.validateObject(payload) || (!identity?.ikomidaID && !iKomidaId)) {
+      if (!payload.validate() || !this.validateObject(payload) || !agent || (!identity?.ikomidaID && !iKomidaId)) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
       }
+      const roles = agent === 'VENDOR' ? Types.Types.TRoles.vendors : Types.Types.TRoles.clients
       const include: Includeable[] = !identity
         ? [
           {
             model: DBModels.PNModel,
             where: {
-              deviceId
+              deviceId,
+              role: {
+                [Domain.SqlDB.Op.in]: roles
+              }
             },
             required: false
           }
@@ -64,6 +68,9 @@ export default class PushNotifications {
         await DBModels.PNModel.destroy({
           where: {
             deviceId,
+            role: {
+              [Domain.SqlDB.Op.in]: roles
+            },
             contractId: contractModel.id
           },
           transaction
