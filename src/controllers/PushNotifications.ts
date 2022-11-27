@@ -324,6 +324,9 @@ export default class PushNotifications {
           Types.Classes.CPushNotificationMessage.init(
             pNMessage?.title,
             pNMessage?.body,
+            undefined,
+            undefined,
+            undefined,
             pNMessage?.createdAt,
             pNMessage?.createdAt.getTime()
           )
