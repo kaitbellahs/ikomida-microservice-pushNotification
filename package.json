@@ -1,6 +1,6 @@
 {
   "name": "ikomida-notification-service",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "ikomida notification service",
   "private": true,
   "module": "build/service.js",
