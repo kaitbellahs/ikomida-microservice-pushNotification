@@ -69,7 +69,7 @@ export default class PushNotifications {
           where: {
             deviceId,
             role: {
-              [Domain.SqlDB.Op.in]: roles
+              [Domain.SqlDB.Op.in]: roles.flatMap(role => { return role.id })
             },
             contractId: contractModel.id
           },
