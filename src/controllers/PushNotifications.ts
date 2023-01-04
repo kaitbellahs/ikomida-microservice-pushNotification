@@ -102,7 +102,7 @@ export default class PushNotifications {
       }
       await transaction.commit()
       transaction = undefined
-      return new Utils.Return(pNModel !== null)
+      return new Classes.Return(pNModel !== null)
     } catch (exception: any) {
       if (transaction) {
         await transaction?.rollback()
@@ -192,7 +192,7 @@ export default class PushNotifications {
           exception
         )
       }
-      return new Utils.Return(true)
+      return new Classes.Return(true)
     } catch (exception: any) {
       let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTOFOCATION_EXCEPTION,
@@ -261,7 +261,7 @@ export default class PushNotifications {
           )
         )
       }
-      return new Utils.Return(true, pNMessages)
+      return new Classes.Return(true, pNMessages)
     } catch (exception: any) {
       let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,
@@ -332,7 +332,7 @@ export default class PushNotifications {
           )
         )
       }
-      return new Utils.Return(true, pNMessages)
+      return new Classes.Return(true, pNMessages)
     } catch (exception: any) {
       let error = new Utils.iKomidaError(
         Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_PUSH_NOTOFOCATION_EXCEPTION,

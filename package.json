@@ -1,6 +1,6 @@
 {
   "name": "ikomida-notification-service",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "ikomida notification service",
   "private": true,
   "module": "build/service.js",
@@ -27,7 +27,7 @@
   "author": "Khalid Ait Bellahs",
   "license": "UNLICENSED",
   "dependencies": {
-    "@ikomida/shared-backend": "^1.5.24",
+    "@ikomida/shared-backend": "^1.5.26",
     "@ikomida/shared-logics": "^1.2.1",
     "@ikomida/shared-types": "^1.6.0",
     "body-parser": "^1.20.1",

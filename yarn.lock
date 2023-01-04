@@ -212,10 +212,10 @@
   resolved "https://registry.yarnpkg.com/@humanwhocodes/object-schema/-/object-schema-1.2.1.tgz#b520529ec21d8e5945a1851dfd1c32e94e39ff45"
   integrity sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==
 
-"@ikomida/shared-backend@^1.5.24":
-  version "1.5.24"
-  resolved "https://us-central1-npm.pkg.dev/ikomida-dev/node/@ikomida/shared-backend/-/@ikomida/shared-backend-1.5.24.tgz#80d45b05bfa257e502c31916560b4fbe33c4b010"
-  integrity sha512-fXBFjzK+GiRvP3lujIXKqsPhiaTHy0wHpqAyMHB/OdY6CRKvMrsYXnTMOX6A/hY7NUgMynHecCDQKMKVzXgM+Q==
+"@ikomida/shared-backend@^1.5.26":
+  version "1.5.26"
+  resolved "https://us-central1-npm.pkg.dev/ikomida-dev/node/@ikomida/shared-backend/-/@ikomida/shared-backend-1.5.26.tgz#5dd6c32c2b6e5a6e29c45b97a96e9d7683f50382"
+  integrity sha512-zpUyX5j0kB5YYgtp9LrpYlX+hxvt0qo8x/v5lPEXYscRgvbqua8nt+DpQS444QjYLfA7vOpJNs2lRl92khxvtw==
   dependencies:
     amqplib "^0.10.3"
     axios "^1.1.3"
