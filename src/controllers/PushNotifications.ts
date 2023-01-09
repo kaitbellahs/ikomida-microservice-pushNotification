@@ -1,4 +1,6 @@
-import { Domain, Utils, BackendTypes, Logics, Types, DBModels, objHasProp } from '@ikomida/shared-backend'
+import { Domain, Utils, DBModels, objHasProp } from '@ikomida/shared-backend'
+import { Finances } from '@ikomida/shared-logics'
+import { Classes, Types } from '@ikomida/shared-types'
 import { Includeable } from 'sequelize'
 
 export default class PushNotifications {
@@ -8,40 +10,40 @@ export default class PushNotifications {
     this.logger = logger
   }
 
-  async register(input: any, iKomidaId?: string, agent?: string, deviceId?: string, identity?: Types.Classes.CUser) {
+  async register(input: any, iKomidaId?: string, agent?: string, deviceId?: string, identity?: Classes.CUser) {
     let transaction: Domain.SqlDB.Transaction | undefined = undefined
-    const payload: Types.Classes.CRegisterPushNotification = Types.Classes.CRegisterPushNotification.fromObject(input)
+    const payload: Classes.CRegisterPushNotification = Classes.CRegisterPushNotification.fromObject(input)
     try {
       if (!payload.validate() || !this.validateObject(payload) || !agent || (!identity?.ikomidaID && !iKomidaId)) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_REGISTER_MISSING_DATA)
       }
-      const roles = agent === 'VENDOR' ? Types.Types.TRoles.vendors : Types.Types.TRoles.clients
+      const roles = agent === 'VENDOR' ? Types.TRoles.vendors : Types.TRoles.clients
       const include: Includeable[] = !identity
         ? [
-          {
-            model: DBModels.PNModel,
-            where: {
-              deviceId,
-              role: {
-                [Domain.SqlDB.Op.in]: roles
-              }
-            },
-            required: false
-          }
-        ]
+            {
+              model: DBModels.PNModel,
+              where: {
+                deviceId,
+                role: {
+                  [Domain.SqlDB.Op.in]: roles
+                }
+              },
+              required: false
+            }
+          ]
         : [
-          {
-            model: DBModels.UserModel,
-            where: { id: identity.id },
-            required: false,
-            include: [
-              {
-                model: DBModels.PNModel,
-                required: false
-              }
-            ]
-          }
-        ]
+            {
+              model: DBModels.UserModel,
+              where: { id: identity.id },
+              required: false,
+              include: [
+                {
+                  model: DBModels.PNModel,
+                  required: false
+                }
+              ]
+            }
+          ]
       const contractModel = await DBModels.ContractModel.findOne({
         where: {
           ikomidaID: identity?.ikomidaID ?? iKomidaId
@@ -69,7 +71,9 @@ export default class PushNotifications {
           where: {
             deviceId,
             role: {
-              [Domain.SqlDB.Op.in]: roles.flatMap(role => { return role.id })
+              [Domain.SqlDB.Op.in]: roles.flatMap(role => {
+                return role.id
+              })
             },
             contractId: contractModel.id
           },
@@ -115,9 +119,9 @@ export default class PushNotifications {
     }
   }
 
-  async newPushNotification(identity: Types.Classes.CUser, input: any) {
+  async newPushNotification(identity: Classes.CUser, input: any) {
     try {
-      const payload: Types.Classes.CNotification = Types.Classes.CNotification.fromObject(input)
+      const payload: Classes.CNotification = Classes.CNotification.fromObject(input)
       if (!payload.validate() || !this.validatePushNotificationObject(payload)) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_NEW_PUSH_NOTIFICATION_MISSING_DATA)
       }
@@ -136,7 +140,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.VENDOR, Types.Types.TRoles.STAFF, Types.Types.TRoles.ADMIN]
+                [Domain.SqlDB.Op.in]: [Types.TRoles.VENDOR, Types.TRoles.STAFF, Types.TRoles.ADMIN]
               }
             },
             required: true
@@ -178,7 +182,7 @@ export default class PushNotifications {
         )
       }
       try {
-        const payload = new Types.Classes.CAMQPPayload<string>({
+        const payload = new Classes.CAMQPPayload<string>({
           method: 'sendVendorPushNotifications',
           object: vendorPNMessage?.id
         })
@@ -205,15 +209,15 @@ export default class PushNotifications {
     }
   }
 
-  async getPushNotifications(identity: Types.Classes.CUser, timestamp = 0) {
+  async getPushNotifications(identity: Classes.CUser, timestamp = 0) {
     try {
       const where =
-        timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
+        timestamp && timestamp != 0 && Number(Finances.toNumber(timestamp)) == timestamp
           ? {
-            createdAt: {
-              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Finances.toNumber(timestamp)))
+              }
             }
-          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
         subQuery: false,
@@ -230,7 +234,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.VENDOR, Types.Types.TRoles.STAFF, Types.Types.TRoles.ADMIN]
+                [Domain.SqlDB.Op.in]: [Types.TRoles.VENDOR, Types.TRoles.STAFF, Types.TRoles.ADMIN]
               }
             },
             required: true
@@ -246,11 +250,11 @@ export default class PushNotifications {
       if (!contractModel) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNMessages: Types.Classes.CPushNotificationMessage[] = []
+      const pNMessages: Classes.CPushNotificationMessage[] = []
       //TODO: create class
       for (const vendorPNMessage of contractModel?.vendorPNMessages ?? []) {
         pNMessages?.push(
-          Types.Classes.CPushNotificationMessage.init(
+          Classes.CPushNotificationMessage.init(
             vendorPNMessage?.title,
             vendorPNMessage?.body,
             vendorPNMessage?.sends,
@@ -274,15 +278,15 @@ export default class PushNotifications {
     }
   }
 
-  async getPushNotificationMessages(identity: Types.Classes.CUser, timestamp = 0) {
+  async getPushNotificationMessages(identity: Classes.CUser, timestamp = 0) {
     try {
       const where =
-        timestamp && timestamp != 0 && Number(Logics.Finances.toNumber(timestamp)) == timestamp
+        timestamp && timestamp != 0 && Number(Finances.toNumber(timestamp)) == timestamp
           ? {
-            createdAt: {
-              [Domain.SqlDB.Op.lt]: new Date(Number(Logics.Finances.toNumber(timestamp)))
+              createdAt: {
+                [Domain.SqlDB.Op.lt]: new Date(Number(Finances.toNumber(timestamp)))
+              }
             }
-          }
           : {}
       const contractModel = await DBModels.ContractModel.findOne({
         subQuery: false,
@@ -299,7 +303,7 @@ export default class PushNotifications {
             where: {
               id: identity.id,
               role: {
-                [Domain.SqlDB.Op.in]: [Types.Types.TRoles.CLIENT]
+                [Domain.SqlDB.Op.in]: [Types.TRoles.CLIENT]
               }
             },
             required: true,
@@ -317,11 +321,11 @@ export default class PushNotifications {
       if (!contractModel) {
         throw new Utils.iKomidaError(Utils.iKomidaError.IKOMIDA_NOTIFICATION_SERVICE_GET_MESSAGES_CONTRACT)
       }
-      const pNMessages: Types.Classes.CPushNotificationMessage[] = []
+      const pNMessages: Classes.CPushNotificationMessage[] = []
       //TODO: create class
       for (const pNMessage of contractModel?.users?.[0].pNMessages ?? []) {
         pNMessages?.push(
-          Types.Classes.CPushNotificationMessage.init(
+          Classes.CPushNotificationMessage.init(
             pNMessage?.title,
             pNMessage?.body,
             undefined,
